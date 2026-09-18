@@ -1,0 +1,21 @@
+ai:
+  provider: ollama
+  general_model: ""
+  coding_model: ""
+  vision_model: ""
+
+screen:
+  capture_interval: 2
+  change_threshold: 0.08
+
+ghost:
+  enabled: false
+
+ocr:
+  enabled: true
+
+voice:
+  enabled: false
+
+privacy:
+  save_screenshots: false

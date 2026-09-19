@@ -47,8 +47,27 @@ class UserInterfaceTests(unittest.TestCase):
             self.window.ghost_button.click()
 
         self.assertEqual(information.call_count, 2)
+        analysis_message = information.call_args_list[0].args[2]
+        self.assertIn("Capture: INACTIVE", analysis_message)
+        self.assertIn("Change detection: INACTIVE", analysis_message)
+        self.assertIn(
+            "Latest change details: not surfaced in this view.",
+            analysis_message,
+        )
         self.assertEqual(self.window.ghost_status.text(), "OFF")
         self.assertEqual(self.window.ai_status.text(), "OFFLINE")
+
+    def test_analysis_dialog_reports_active_runtime_state(self) -> None:
+        self.window.slot_capture_started()
+
+        with patch(
+            "src.ui.main_window.QMessageBox.information"
+        ) as information:
+            self.window.analyze_button.click()
+
+        analysis_message = information.call_args.args[2]
+        self.assertIn("Capture: ACTIVE", analysis_message)
+        self.assertIn("Change detection: ACTIVE", analysis_message)
 
     def test_settings_are_actual_configuration_and_read_only(self) -> None:
         dialog = SettingsDialog(

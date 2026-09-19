@@ -8,13 +8,15 @@ import threading
 from pathlib import Path
 from types import TracebackType
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from src import __version__
 from src.app.config import ConfigError, load_config, runtime_directory
 from src.app.logging_config import close_logging, configure_logging
+from src.capture.worker import CaptureWorker
 from src.ui.main_window import MainWindow, STYLESHEET
+from src.vision.detector import ChangeDetector
 
 
 def show_error(title: str, message: str) -> None:
@@ -94,7 +96,7 @@ class ExceptionBridge(QObject):
 
 
 def run_application(config_path: Path | None = None) -> int:
-    """Create one Qt application and own all Phase 1 resources."""
+    """Create one Qt application and own all Phase 1/2/3 resources."""
     application = QApplication([sys.argv[0]])
     application.setApplicationName("SYMBIOTE GHOST")
     application.setApplicationVersion(__version__)
@@ -106,6 +108,9 @@ def run_application(config_path: Path | None = None) -> int:
     logger: logging.Logger | None = None
     bridge: ExceptionBridge | None = None
     window: MainWindow | None = None
+    capture_worker: CaptureWorker | None = None
+    capture_thread: QThread | None = None
+    capture_timer: QTimer | None = None
 
     try:
         data_directory = runtime_directory()
@@ -127,12 +132,60 @@ def run_application(config_path: Path | None = None) -> int:
         bridge.install()
 
         window = MainWindow(configuration, effective_path)
-        application.aboutToQuit.connect(
-            lambda: logger.info("shutdown_requested")
+
+        # --- Phase 2: capture worker on a dedicated thread ---
+        capture_worker = CaptureWorker(configuration)
+        capture_thread = QThread()
+        capture_worker.moveToThread(capture_thread)
+
+        # Connect worker signals to MainWindow slots.
+        capture_worker.capture_started.connect(window.slot_capture_started)
+        capture_worker.capture_stopped.connect(window.slot_capture_stopped)
+        capture_worker.capture_error.connect(window.slot_capture_error)
+
+        # --- Phase 3: bounded latest-frame consumption ---
+        detector = ChangeDetector(configuration)
+
+        def _consume_latest_frame() -> None:
+            """Process at most the newest frame currently available."""
+            if capture_worker is None:
+                return
+            frame = capture_worker.take_latest_frame()
+            if frame is None:
+                return
+            try:
+                result = detector.process(frame)
+                if result.changed:
+                    logger.info("screen_changed")
+            except Exception:
+                logger.error("change_detection_failed", exc_info=True)
+
+        capture_timer = QTimer(application)
+        capture_timer.setInterval(
+            max(1, round(configuration.screen.capture_interval * 1000))
         )
+        capture_timer.timeout.connect(_consume_latest_frame)
+
+        # Start the capture thread when the worker's run_capture slot fires.
+        capture_thread.started.connect(capture_worker.run_capture)
+
+        # When the worker stops, quit the thread's event loop.
+        capture_worker.capture_stopped.connect(capture_thread.quit)
+
+        def _request_shutdown() -> None:
+            logger.info("shutdown_requested")
+            if capture_worker is not None:
+                capture_worker.stop()
+
+        application.aboutToQuit.connect(_request_shutdown)
 
         window.show()
         logger.info("main_window_shown")
+
+        # Start capture after the window is shown so the UI is responsive.
+        capture_thread.start()
+        capture_timer.start()
+
         exit_code = application.exec()
         return 1 if bridge.failed else exit_code
 
@@ -161,6 +214,15 @@ def run_application(config_path: Path | None = None) -> int:
     finally:
         if bridge is not None:
             bridge.restore()
+
+        # Stop capture worker and wait for the thread to finish.
+        if capture_timer is not None:
+            capture_timer.stop()
+        if capture_worker is not None:
+            capture_worker.stop()
+        if capture_thread is not None and capture_thread.isRunning():
+            capture_thread.quit()
+            capture_thread.wait(3000)  # Wait up to 3 seconds.
 
         if window is not None:
             window.close()

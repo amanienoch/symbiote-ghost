@@ -42,8 +42,10 @@ py -3.14 -m venv .venv
 ```
 
 Internet access is needed to obtain dependencies unless you already have
-a suitable local package cache. The application itself has no Phase 1
-network integration.
+a suitable local package cache. The application itself makes no network
+requests at runtime.
+
+Dependencies: `PySide6==6.10.1`, `PyYAML==6.0.3`, `mss==9.0.2`.
 
 ## Automated checks
 

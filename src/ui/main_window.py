@@ -1,11 +1,11 @@
-"""Phase 1 desktop shell and read-only configuration viewer."""
+"""Desktop shell, read-only configuration viewer, and capture status slots."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
         ghost_card, self.ghost_status = self._status_card("GHOST MODE", "OFF")
         ai_card, self.ai_status = self._status_card("AI", "OFFLINE")
         screen_card, self.screen_status = self._status_card("SCREEN", "READY")
+        self.change_detection_active = False
         status_row.addWidget(ghost_card)
         status_row.addWidget(ai_card)
         status_row.addWidget(screen_card)
@@ -211,8 +212,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(
             make_label(
                 "SCREEN: READY means the shell is ready for the future "
-                "capture module. No screen capture or AI connection has "
-                "been started or checked.",
+                "capture module. Capture becomes ACTIVE when screen capture "
+                "starts successfully. Screen analysis and AI are not "
+                "available in the current phase.",
                 "Muted",
                 word_wrap=True,
             )
@@ -223,19 +225,19 @@ class MainWindow(QMainWindow):
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(24, 24, 24, 24)
         panel_layout.setSpacing(16)
-        panel_layout.addWidget(make_label("Foundation online", "SectionTitle"))
+        panel_layout.addWidget(make_label("Capture foundation online", "SectionTitle"))
         panel_layout.addWidget(
             make_label(
                 "The desktop shell, configuration loader, local event "
-                "logging, and shutdown lifecycle are available.",
+                "logging, screen capture, and change detection are available.",
                 word_wrap=True,
             )
         )
         panel_layout.addWidget(
             make_label(
-                "Screen analysis and background assistance will be added "
-                "in subsequent phases. The controls below explain their "
-                "current availability.",
+                "OCR, AI explanations, and background assistance belong to "
+                "later phases. The controls below explain their current "
+                "availability.",
                 "Muted",
                 word_wrap=True,
             )
@@ -245,7 +247,7 @@ class MainWindow(QMainWindow):
         button_row.setSpacing(12)
         self.analyze_button = QPushButton("Analyze Screen")
         self.analyze_button.setObjectName("PrimaryButton")
-        self.analyze_button.setToolTip("Not available in Phase 1")
+        self.analyze_button.setToolTip("Screen analysis is not available yet")
         self.ghost_button = QPushButton("Ghost Mode")
         self.ghost_button.setToolTip("Not available until Phase 8")
         self.settings_button = QPushButton("Settings")
@@ -271,7 +273,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.statusBar().showMessage(
-            "PHASE 1  |  Capture inactive  |  AI inactive  |  Close window to exit"
+            "PHASE 2/3  |  Capture inactive  |  AI inactive  |  Close window to exit"
         )
 
     @staticmethod
@@ -288,13 +290,23 @@ class MainWindow(QMainWindow):
 
     def _show_analysis_unavailable(self) -> None:
         self.logger.info("analysis_unavailable")
+        capture_state = {
+            "ACTIVE": "ACTIVE",
+            "ERROR": "ERROR",
+        }.get(self.screen_status.text(), "INACTIVE")
+        detection_state = (
+            "ACTIVE" if self.change_detection_active else "INACTIVE"
+        )
         QMessageBox.information(
             self,
             "Screen analysis is not available yet",
-            "Phase 1 does not capture or analyze your screen.\n\n"
-            "Real screen capture is introduced in Phase 2. "
-            "AI explanations require the Ollama integration in Phase 5.\n\n"
-            "No screen information was collected.",
+            f"Capture: {capture_state}\n"
+            f"Change detection: {detection_state}\n"
+            "Latest change details: not surfaced in this view.\n\n"
+            "Screen capture and change detection are available in Phases 2 "
+            "and 3, but this control does not produce an analysis result.\n\n"
+            "OCR and AI explanations require later phases. No screen "
+            "content is displayed or sent to a cloud service.",
         )
 
     def _show_ghost_unavailable(self) -> None:
@@ -314,3 +326,43 @@ class MainWindow(QMainWindow):
             dialog.exec()
         finally:
             dialog.deleteLater()
+
+    # ------------------------------------------------------------------
+    # Phase 2 capture state slots
+    # These slots are connected by application.py after the window is
+    # created. The initial state (READY / "Capture inactive") is set in
+    # __init__ and is not changed until the worker emits its first signal.
+    # ------------------------------------------------------------------
+
+    @Slot()
+    def slot_capture_started(self) -> None:
+        """Update the SCREEN status card when capture begins."""
+        self.change_detection_active = True
+        self.screen_status.setText("ACTIVE")
+        self.screen_status.setAccessibleName("SCREEN: ACTIVE")
+        self.statusBar().showMessage(
+            "PHASE 2  |  Capture active  |  AI inactive  |  Close window to exit"
+        )
+
+    @Slot()
+    def slot_capture_stopped(self) -> None:
+        """Restore the SCREEN status card when capture stops."""
+        self.change_detection_active = False
+        self.screen_status.setText("READY")
+        self.screen_status.setAccessibleName("SCREEN: READY")
+        self.statusBar().showMessage(
+            "PHASE 2  |  Capture inactive  |  AI inactive  |  Close window to exit"
+        )
+
+    @Slot(str)
+    def slot_capture_error(self, event_name: str) -> None:
+        """Update the SCREEN status card on a capture error.
+
+        The event_name is a fixed log event string — never screen content.
+        """
+        self.change_detection_active = False
+        self.screen_status.setText("ERROR")
+        self.screen_status.setAccessibleName("SCREEN: ERROR")
+        self.statusBar().showMessage(
+            "PHASE 2  |  Capture error  |  AI inactive  |  Close window to exit"
+        )

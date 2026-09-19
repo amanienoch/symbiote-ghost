@@ -5,14 +5,14 @@ phases.
 
 ## Current stage
 
-Phase 1: project foundation.
+Phase 3: change detection (Phases 1, 2, and 3 complete).
 
 The application provides a PySide6 desktop shell, validated YAML
-configuration, rotating JSON Lines logs, explicit feature-availability
-messages, and a read-only settings viewer.
+configuration, rotating JSON Lines logs, real Windows screen capture via MSS,
+CPU-efficient frame change detection, and a read-only settings viewer.
 
-Screen capture, OCR, Ollama integration, Ghost Mode, overlays, global
-hotkeys, and voice are not implemented in this phase.
+OCR, Ollama integration, Ghost Mode, overlays, global hotkeys, and voice are
+not implemented.
 
 ## Requirements
 
@@ -44,11 +44,13 @@ See SETUP.md for installation without PowerShell scripts.
 
 ## Status semantics
 
-| Display | Meaning in Phase 1 |
+| Display | Meaning |
 |---|---|
 | GHOST MODE: OFF | No background processing pipeline exists |
 | AI: OFFLINE | No AI provider is connected or probed |
-| SCREEN: READY | Shell readiness only; capture is not implemented |
+| SCREEN: READY | Capture subsystem ready; not yet started or stopped |
+| SCREEN: ACTIVE | MSS capture loop is running on the background thread |
+| SCREEN: ERROR | A capture error occurred; see the log file |
 
 Analyze Screen and Ghost Mode display availability explanations.
 They do not collect data or activate anything.
@@ -152,7 +154,8 @@ added and run as the project develops.
 
 ## Next phase
 
-Phase 2 introduces real asynchronous Windows screen capture, monitor
-discovery, configurable resolution and interval, and region selection.
+Phase 4 introduces bounded local OCR on changed frames.
 
-Do not treat Phase 1 as a functioning screen-analysis assistant.
+Do not treat Phases 1–3 as a functioning screen-analysis assistant.
+Change detection identifies that the screen changed; it does not read or
+interpret screen content.

@@ -7,8 +7,8 @@ authorization.
 | Phase | Status | Intended purpose |
 |---|---|---|
 | Phase 1 — Foundation | COMPLETE | Establish the Python desktop shell, configuration validation, local structured logging, honest UI status, and foundation tests. |
-| Phase 2 — Screen Capture | NEXT | Add controlled Windows screen and monitor capture with explicit boundaries, configuration, and no implicit persistence. |
-| Phase 3 — Change Detection | PLANNED | Detect meaningful screen changes and avoid redundant downstream processing. |
+| Phase 2 — Screen Capture | IMPLEMENTED | MSS-based Windows screen capture, monitor discovery, region model, background QThread worker, latest-frame replacement policy. |
+| Phase 3 — Change Detection | IMPLEMENTED | Pure-Python stride-based grayscale change detection, normalised MAD score, configurable threshold, bounded single-frame state. |
 | Phase 4 — OCR | PLANNED | Add bounded local text extraction from authorized captured content. |
 | Phase 5 — Ollama / Local AI | PLANNED | Integrate an explicitly local Ollama provider with lazy, cancellable, user-controlled requests. |
 | Phase 6 — Vision | PLANNED | Add local image/vision interpretation for supported screen-analysis workflows. |
